@@ -5,6 +5,15 @@ VisualStudioVersion = 12.0.30723.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Trifecta", "Trifecta\Trifecta.fsproj", "{5C38195E-3DD7-4ECD-BB0C-0ABB50F47262}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".nuget", ".nuget", "{CA628E08-6ABC-49B5-B566-086A714EA0E6}"
+	ProjectSection(SolutionItems) = preProject
+		.nuget\NuGet.Config = .nuget\NuGet.Config
+		.nuget\NuGet.exe = .nuget\NuGet.exe
+		.nuget\NuGet.targets = .nuget\NuGet.targets
+	EndProjectSection
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Trifecta.Tests", "Trifecta.Tests\Trifecta.Tests.fsproj", "{058A4CD5-E41D-4734-9441-6E919F8E1457}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +24,10 @@ Global
 		{5C38195E-3DD7-4ECD-BB0C-0ABB50F47262}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{5C38195E-3DD7-4ECD-BB0C-0ABB50F47262}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{5C38195E-3DD7-4ECD-BB0C-0ABB50F47262}.Release|Any CPU.Build.0 = Release|Any CPU
+		{058A4CD5-E41D-4734-9441-6E919F8E1457}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{058A4CD5-E41D-4734-9441-6E919F8E1457}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{058A4CD5-E41D-4734-9441-6E919F8E1457}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{058A4CD5-E41D-4734-9441-6E919F8E1457}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
