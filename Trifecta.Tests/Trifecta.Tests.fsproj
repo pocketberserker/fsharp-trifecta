@@ -59,6 +59,18 @@
     <Content Include="packages.config" />
     <Content Include="app.config" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\FSharp.Monad.Free\FSharp.Monad.Free.fsproj">
+      <Name>FSharp.Monad.Free</Name>
+      <Project>{53a13143-0dfb-42e8-88f1-a40bb58f885e}</Project>
+      <Private>True</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\Trifecta\Trifecta.fsproj">
+      <Name>Trifecta</Name>
+      <Project>{5c38195e-3dd7-4ecd-bb0c-0abb50f47262}</Project>
+      <Private>True</Private>
+    </ProjectReference>
+  </ItemGroup>
   <PropertyGroup>
     <MinimumVisualStudioVersion Condition="'$(MinimumVisualStudioVersion)' == ''">11</MinimumVisualStudioVersion>
   </PropertyGroup>

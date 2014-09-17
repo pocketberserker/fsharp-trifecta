@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 2013
-VisualStudioVersion = 12.0.30723.0
+VisualStudioVersion = 12.0.30501.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Trifecta", "Trifecta\Trifecta.fsproj", "{5C38195E-3DD7-4ECD-BB0C-0ABB50F47262}"
 EndProject
@@ -13,6 +13,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".nuget", ".nuget", "{CA628E
 	EndProjectSection
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Trifecta.Tests", "Trifecta.Tests\Trifecta.Tests.fsproj", "{058A4CD5-E41D-4734-9441-6E919F8E1457}"
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FSharp.Monad.Free", "FSharp.Monad.Free\FSharp.Monad.Free.fsproj", "{53A13143-0DFB-42E8-88F1-A40BB58F885E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -28,6 +30,10 @@ Global
 		{058A4CD5-E41D-4734-9441-6E919F8E1457}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{058A4CD5-E41D-4734-9441-6E919F8E1457}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{058A4CD5-E41D-4734-9441-6E919F8E1457}.Release|Any CPU.Build.0 = Release|Any CPU
+		{53A13143-0DFB-42E8-88F1-A40BB58F885E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{53A13143-0DFB-42E8-88F1-A40BB58F885E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{53A13143-0DFB-42E8-88F1-A40BB58F885E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{53A13143-0DFB-42E8-88F1-A40BB58F885E}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
