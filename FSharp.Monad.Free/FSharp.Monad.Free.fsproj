@@ -73,6 +73,7 @@
     <Compile Include="Operational.fs" />
     <Compile Include="Coproduct.fs" />
     <Compile Include="Inject.fs" />
+    <Compile Include="Endo.fs" />
     <None Include="app.config" />
   </ItemGroup>
   <ItemGroup>
