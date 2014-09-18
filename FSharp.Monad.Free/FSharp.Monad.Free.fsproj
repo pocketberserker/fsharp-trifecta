@@ -66,10 +66,12 @@
     <Compile Include="Monoid.fs" />
     <Compile Include="Endo.fs" />
     <Compile Include="Foldable.fs" />
+    <Compile Include="Traverse.fs" />
     <Compile Include="CoYoneda.fs" />
     <Compile Include="Free.fs" />
     <Compile Include="Id.fs" />
     <Compile Include="Option.fs" />
+    <Compile Include="List.fs" />
     <Compile Include="WriterT.fs" />
     <Compile Include="Trampoline.fs" />
     <Compile Include="Operational.fs" />
