@@ -67,6 +67,7 @@
     <Compile Include="CoYoneda.fs" />
     <Compile Include="Free.fs" />
     <Compile Include="Id.fs" />
+    <Compile Include="Option.fs" />
     <Compile Include="WriterT.fs" />
     <Compile Include="Trampoline.fs" />
     <Compile Include="Operational.fs" />
