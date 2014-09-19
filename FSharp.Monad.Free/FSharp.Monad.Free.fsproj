@@ -78,6 +78,7 @@
     <Compile Include="Coproduct.fs" />
     <Compile Include="Inject.fs" />
     <Compile Include="Ordering.fs" />
+    <Compile Include="Order.fs" />
     <None Include="app.config" />
   </ItemGroup>
   <ItemGroup>
