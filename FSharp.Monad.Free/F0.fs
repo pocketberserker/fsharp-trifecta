@@ -24,3 +24,4 @@ module F0 =
 module F0DefaultOps =
 
   let (|F0|) f = F0.ofFunc f
+  let (|StdF0|) f = F0.toFunc f

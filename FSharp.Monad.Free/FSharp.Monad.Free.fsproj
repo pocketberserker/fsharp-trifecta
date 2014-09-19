@@ -69,6 +69,10 @@
     <Compile Include="Traverse.fs" />
     <Compile Include="CoYoneda.fs" />
     <Compile Include="Free.fs" />
+    <Compile Include="Plus.fs" />
+    <Compile Include="PlusEmpty.fs" />
+    <Compile Include="MonadPlus.fs" />
+    <Compile Include="Alternative.fs" />
     <Compile Include="Id.fs" />
     <Compile Include="Option.fs" />
     <Compile Include="List.fs" />
