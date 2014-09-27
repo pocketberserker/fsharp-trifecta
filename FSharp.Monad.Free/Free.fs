@@ -76,6 +76,8 @@ module Free =
 
   let coyoneda<'F, 'T> = monad CoYoneda.functor_<'F, 'T>
 
+  let map f (free: Free<_, _>) = bind (fun a -> done_ (f a)) free
+
 type FreeBuilder () =
   member this.Return(x) = Free.done_ x
   member this.ReturnFrom(x) = x
