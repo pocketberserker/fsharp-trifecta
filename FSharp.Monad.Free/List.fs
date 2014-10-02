@@ -38,3 +38,9 @@ module List =
     member x.Traverse(fa: _1<_, _>, StdF1 f, G: #Applicative<_>) =
       fa :?> List<_> |> toStdList |> traverse' G f
   }
+
+  let monad = { new Monad<List>() with
+    member this.Map(f, fa) = fa :?> List<_> |> toStdList |> List.map f |> ofStdList
+    member this.Point(a) = { Value = [a.Apply()] } :> _1<List, _>
+    member this.Bind(StdF1 f, fa) =
+      fa :?> List<_> |> toStdList |> List.collect (fun a -> f a :?> List<_> |> toStdList) |> ofStdList }
