@@ -702,3 +702,11 @@ module Parser =
   // TODO: existsIn
 
   // TODO: Op module
+
+  let inline (<*>) f m = f >>= fun f' -> m >>= fun m' -> unit (f' m')
+  let inline (<!>) f m = map f m
+  let inline lift2 f a b = unit f <*> a <*> b
+  let inline ( *>) x y = lift2 (fun _ z -> z) x y
+  let inline ( <*) x y = lift2 (fun z _ -> z) x y
+
+  let commaSep (p: Parser<_, _>) = (pchar ',').SepBy(p :> _1<_, _>) :?> Parser<_, _ list>
