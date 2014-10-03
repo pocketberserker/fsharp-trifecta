@@ -39,6 +39,10 @@
       <HintPath>..\packages\FsCheck.1.0.0\lib\net45\FsCheck.dll</HintPath>
       <Private>True</Private>
     </Reference>
+    <Reference Include="FSharp.Karma">
+      <HintPath>..\packages\FSharp.Karma.0.1.0.0\lib\net40\FSharp.Karma.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="FsUnit.NUnit">
       <HintPath>..\packages\FsUnit.1.3.0.1\Lib\Net40\FsUnit.NUnit.dll</HintPath>
       <Private>True</Private>
@@ -60,11 +64,6 @@
     <Content Include="app.config" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\FSharp.Monad.Free\FSharp.Monad.Free.fsproj">
-      <Name>FSharp.Monad.Free</Name>
-      <Project>{53a13143-0dfb-42e8-88f1-a40bb58f885e}</Project>
-      <Private>True</Private>
-    </ProjectReference>
     <ProjectReference Include="..\Trifecta\Trifecta.fsproj">
       <Name>Trifecta</Name>
       <Project>{5c38195e-3dd7-4ecd-bb0c-0abb50f47262}</Project>

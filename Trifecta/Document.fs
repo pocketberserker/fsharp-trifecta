@@ -1,7 +1,7 @@
 ﻿namespace Trifecta
 
 open System.IO
-open FSharp.Monad
+open FSharp.Karma
 
 type Document =
   | DocNil

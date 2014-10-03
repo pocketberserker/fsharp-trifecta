@@ -1,6 +1,6 @@
 ﻿namespace Trifecta
 
-open FSharp.Monad
+open FSharp.Karma
 
 type Scoped<'T, 'A> =
   abstract member Self: _1<'T, 'A>

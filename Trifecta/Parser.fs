@@ -1,6 +1,6 @@
 ﻿namespace Trifecta
 
-open FSharp.Monad
+open FSharp.Karma
 
 type ParseResult = ParseResult
 type ParseResult<'S, 'A> =

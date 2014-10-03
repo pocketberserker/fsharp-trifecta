@@ -1,7 +1,7 @@
 ﻿namespace Trifecta
 
 open System
-open FSharp.Monad
+open FSharp.Karma
 
 [<AbstractClass>]
 type Located() =
