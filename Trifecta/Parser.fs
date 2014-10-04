@@ -16,7 +16,7 @@ type Fail<'S, 'A>(msg: Document option, aux: Document list, expected: Set<string
   member this.Message = msg
   member this.Aux = aux
   member this.Expected = expected
-  member this.Map(_) = Fail(msg, aux, expected) :> _1<_, _>
+  member this.Map(_) = Fail<'S, _>(msg, aux, expected) :> _1<_, _>
   member this.As(b) = this.Map(fun _ -> b)
   member this.Self = this :> _1<_, _>
   member this.Skip = this.As(())
@@ -79,11 +79,11 @@ module Error =
 type Pure<'S, 'A>(extract: 'A, last: Fail<'S, 'A>) =
   let fail (f: Fail<_, _>) = Fail(f.Message, f.Aux, f.Expected)
   member this.Last = last
-  member this.Map(f) = Pure(f extract, fail last) :> _1<_, _>
-  member this.As(b) = Pure(b, fail last) :> _1<_, _>
+  member this.Map(f) = Pure<'S, _>(f extract, fail last) :> _1<_, _>
+  member this.As(b) = Pure<'S, _>(b, fail last) :> _1<_, _>
   member this.Self = this :> _1<_, _>
   member this.Skip = this.As(())
-  member this.Extend(f) = Pure(this :> _1<_, _> |> f, fail last) :> _1<_, _>
+  member this.Extend(f) = Pure<'S, _>(this :> _1<_, _> |> f, fail last) :> _1<_, _>
   member this.Extract = extract
   interface Functorial<ParseResult, 'A> with
     member this.Map(f) = this.Map(f)
@@ -93,7 +93,7 @@ type Pure<'S, 'A>(extract: 'A, last: Fail<'S, 'A>) =
   interface ParseResult<'S, 'A>
   interface Comonadic<ParseResult, 'A> with
     member this.Extend(f) = this.Extend(f)
-    member this.LiftC(v) = v :?> Pure<_, _> :> Comonadic<ParseResult, _>
+    member this.LiftC(v) = v :?> Pure<'S, _> :> Comonadic<ParseResult, _>
     member this.Map(f) = this.Map(f)
     member this.Extract = this.Extract
 
@@ -155,133 +155,131 @@ and Commit<'S, 'A>(s: ParseState<'S>, extract: 'A, expected: Set<string>) =
 
 and [<AbstractClass>] Parser<'S, 'A>() =
   inherit MonadicPlus<Parser, 'A>()
-  abstract member Apply: ParseState<'S> * Supply -> Trampoline<ParseResult<'S, 'A>>
+  abstract member Apply: ParseState<'S> * Supply -> ParseResult<'S, 'A>
   override this.Self() = this :> _1<_, _>
   override this.Map(f) =
-    { new Parser<_, _>() with
-      member x.Apply(s, vs) = this.Apply(s, vs) |> Free.map (fun x -> x.Map(f) :?> ParseResult<_, _>) }
+    { new Parser<'S, _>() with
+      member x.Apply(s, vs) = this.Apply(s, vs) |> (fun x -> x.Map(f) :?> ParseResult<'S, _>) }
     :> _1<_, _>
   override this.Bind(f) =
     { new Parser<'S, _>() with
       member x.Apply(s, vs) =
-        this.Apply(s, vs) |> Free.bind (function
-          | :? Pure<'S, 'A> as r -> (f r.Extract :?> Parser<_, _>).Apply(s, vs) |> Free.map (function
-            | :? Pure<'S, _> as p -> Pure(p.Extract, r.Last ++ p.Last) :> ParseResult<_, _>
-            | :? Fail<'S, _> as f -> r.Last ++ f :> ParseResult<_, _>
-            | r -> r)
+        this.Apply(s, vs) |> function
+          | :? Pure<'S, 'A> as r -> (f r.Extract :?> Parser<'S, _>).Apply(s, vs) |> function
+            | :? Pure<'S, _> as p -> Pure(p.Extract, r.Last ++ p.Last) :> ParseResult<'S, _>
+            | :? Fail<'S, _> as f -> r.Last ++ f :> ParseResult<'S, _>
+            | r -> r
           | :? Commit<'S, 'A> as c ->
-            (f c.Extract :?> Parser<_, _>).Apply(c.S, vs) |> Free.map (function
+            (f c.Extract :?> Parser<'S, _>).Apply(c.S, vs) |> function
               | :? Pure<'S, _> as p ->
                 Commit(c.S, p.Extract, Set.union c.Expected p.Last.Expected)
-                :> ParseResult<_, _>
+                :> ParseResult<'S, _>
               | :? Fail<'S, _> as f ->
                 Error.report c.Pos f.Message  f.Aux (Set.union c.Expected f.Expected)
-                :> ParseResult<_, _>
-              | r -> r)
-          | r ->
-            Trampoline.suspend
-              (fun () -> Trampoline.delay (fun () -> (r :?> ParseFailure<_, _>).Cast() :> ParseResult<_, _>))) }
+                :> ParseResult<'S, _>
+              | r -> r
+          | r -> (r :?> ParseFailure<'S, _>).Cast() :> ParseResult<'S, _> }
     :> _1<_, _>
   override this.WithFilter(pred) =
     { new Parser<'S, _>() with
       member x.Apply(s, vs) =
-        this.Apply(s, vs) |> Free.map (function
-          | :? Pure<'S, 'A> as p when not <| pred p.Extract -> p.Last :> ParseResult<_, _>
+        this.Apply(s, vs) |> function
+          | :? Pure<'S, 'A> as p when not <| pred p.Extract -> p.Last :> ParseResult<'S, _>
           | :? Commit<'S, 'A> as c when not <| pred c.Extract ->
-            Error.report c.Pos None [] c.Expected :> ParseResult<_, _>
-          | r -> r) }
+            Error.report c.Pos None [] c.Expected :> ParseResult<'S, _>
+          | r -> r }
     :> _1<_, _>
   override this.Or(other) =
-    { new Parser<_, 'A>() with
+    { new Parser<'S, 'A>() with
       member x.Apply(s, vs) =
-        this.Apply(s, vs) |> Free.bind (function
+        this.Apply(s, vs) |> function
           | :? Fail<'S, 'A> as f ->
-            (other :?> Parser<_, _>).Apply(s, vs) |> Free.map (function
+            (other :?> Parser<'S, _>).Apply(s, vs) |> function
               | :? Fail<'S, 'A> as e -> f ++ e :> ParseResult<_,_>
-              | :? Pure<'S, 'A> as p-> Pure(p.Extract, f ++ p.Last) :> ParseResult<_, _>
-              | r -> r)
-          | r -> Trampoline.suspend (fun () -> Trampoline.delay (fun () -> r))) }
+              | :? Pure<'S, 'A> as p-> Pure(p.Extract, f ++ p.Last) :> ParseResult<'S, _>
+              | r -> r
+          | r -> r }
     :> _1<_, _>
   override this.OrElse(a) =
-    { new Parser<_, _>() with
+    { new Parser<'S, _>() with
       member x.Apply(s, vs) =
-        this.Apply(s, vs) |> Free.map (function
-          | :? Fail<'S, 'A> as f -> Pure(a, f) :> ParseResult<_, _>
-          | r -> r) }
+        this.Apply(s, vs) |> function
+          | :? Fail<'S, 'A> as f -> Pure(a, f) :> ParseResult<'S, _>
+          | r -> r }
     :> _1<_, _>
   member this.ApplyF(f: ParseState<_> -> Supply -> ParseResult<_, _>) =
     { new Parser<'S, _>() with
-      member x.Apply(s, vs) = Trampoline.delay (fun () -> f s vs) }
+      member x.Apply(s, vs) = f s vs }
   override this.When(b) =
     if b then this.Skip()
-    else this.ApplyF(fun _ _ -> Pure((), Fail(None, [], Set.empty)) :> ParseResult<_, _>) :> _1<_, _>
+    else this.ApplyF(fun _ _ -> Pure((), Fail(None, [], Set.empty)) :> ParseResult<'S, _>) :> _1<_, _>
   override this.LiftF(f) = f :?> Parser<'S, _> :> Filtered<_, _>
   override this.LiftM(m) = m :?> Parser<'S, _> :> Monadic<_, _>
   override this.LiftAl(a) = a :?> Parser<'S, _> :> Alternating<_, _>
   override this.LiftMp(m) = m :?> Parser<'S, _> :> MonadicPlus<_, _>
-  member this.Race(p: Parser<_, _>) =
+  member this.Race(p: Parser<'S, _>) =
     { new Parser<'S, 'A>() with
       member x.Apply(s, vs) =
-        this.Apply(s, vs) |> Free.bind (function
+        this.Apply(s, vs) |> function
           | :? Fail<'S, 'A> as f ->
-            p.Apply(s, vs) |> Free.map (function
-              | :? Fail<'S, 'A> as ep -> f ++ ep :> ParseResult<_, _>
-              | :? Pure<'S, 'A> as r -> Pure(r.Extract, f ++ r.Last) :> ParseResult<_, _>
-              | r -> r)
+            p.Apply(s, vs) |> function
+              | :? Fail<'S, 'A> as ep -> f ++ ep :> ParseResult<'S, _>
+              | :? Pure<'S, 'A> as r -> Pure(r.Extract, f ++ r.Last) :> ParseResult<'S, _>
+              | r -> r
           | :? Error<'S, 'A> as e ->
-            p.Apply(s, vs) |> Free.map (function
-              | :? Fail<'S, 'A> -> e :> ParseResult<_, _>
+            p.Apply(s, vs) |> function
+              | :? Fail<'S, 'A> -> e :> ParseResult<'S, _>
               | :? Error<'S, 'A> as er ->
                 match Pos.order.Order(e.Pos, er.Pos) with
                 | LT -> er
                 | EQ -> e
                 | GT -> e
-                :> ParseResult<_, _>
-              | r -> r)
-          | r -> Trampoline.suspend (fun ()-> Trampoline.delay (fun () -> r))) }
+                :> ParseResult<'S, _>
+              | r -> r
+          | r -> r }
   member this.Scope(desc) =
     { new Parser<'S, _>() with
       member x.Apply(s, vs) =
-        this.Apply(s, vs) |> Free.map (function
-          | :? Fail<'S, 'A> as f -> Fail(f.Message, f.Aux, Set.empty |> Set.add desc) :> ParseResult<_, _>
+        this.Apply(s, vs) |> function
+          | :? Fail<'S, 'A> as f -> Fail(f.Message, f.Aux, Set.empty |> Set.add desc) :> ParseResult<'S, _>
           | :? Error<'S, 'A> as e when s.Tracing() ->
-            Error(e.Pos, e.Msg, e.Aux, (e.Pos, desc) :: e.Stack) :> ParseResult<_, _>
+            Error(e.Pos, e.Msg, e.Aux, (e.Pos, desc) :: e.Stack) :> ParseResult<'S, _>
           | :? Pure<'S, 'A> as p ->
-            Pure(p.Extract, Fail(p.Last.Message, p.Last.Aux, Set.empty |> Set.add desc)) :> ParseResult<_, _>
-          | r -> r) }
+            Pure(p.Extract, Fail(p.Last.Message, p.Last.Aux, Set.empty |> Set.add desc)) :> ParseResult<'S, _>
+          | r -> r }
   member this.Attempt() =
     { new Parser<'S, _>() with
       member x.Apply(s, vs) =
-        this.Apply(s, vs) |> Free.map (function
-          | :? Error<'S, 'A> as e -> Fail(None, [e.Pretty], Set.empty) :> ParseResult<_, _>
-          | r -> r) }
+        this.Apply(s, vs) |> function
+          | :? Error<'S, 'A> as e -> Fail(None, [e.Pretty], Set.empty) :> ParseResult<'S, _>
+          | r -> r }
   member this.Not() =
     { new Parser<'S, _>() with
       member x.Apply(s, vs) =
-        this.Apply(s, vs) |> Free.map (function
+        this.Apply(s, vs) |> function
           | :? Pure<'S, 'A> as p -> Fail(Some((DocText "") <+> (DocText(p.Extract.ToString()))), [], Set.empty) :> ParseResult<_, _>
           | :? Commit<'S, 'A> as c -> Error.report c.Pos (Some((DocText "") <+> (DocText(c.Extract.ToString())))) [] Set.empty :> ParseResult<_, _>
-          | _ -> Pure((), Fail(None, [], Set.empty)) :> ParseResult<_, _>) }
+          | _ -> Pure((), Fail(None, [], Set.empty)) :> ParseResult<'S, _> }
   member this.Slice() =
     { new Parser<'S, _>() with
       member x.Apply(s, vs) =
-        this.Apply(s, vs) |> Free.map (function
-          | :? Pure<'S, 'A> as p -> Pure("", Fail(p.Last.Message, p.Last.Aux, p.Last.Expected)) :> ParseResult<_, _>
-          | :? Commit<'S, 'A> as c -> Commit(c.S, s.Input.Substring(s.Offset, c.S.Offset), c.Expected) :> ParseResult<_, _>
-          | r -> (r :?> ParseFailure<'S, 'A>).Cast() :> ParseResult<_, _>) }
-  member this.Handle(f: ParseFailure<_, _> -> Parser<_, _>) =
+        this.Apply(s, vs) |> function
+          | :? Pure<'S, 'A> as p -> Pure("", Fail(p.Last.Message, p.Last.Aux, p.Last.Expected)) :> ParseResult<'S, _>
+          | :? Commit<'S, 'A> as c -> Commit(c.S, s.Input.Substring(s.Offset, c.S.Offset), c.Expected) :> ParseResult<'S, _>
+          | r -> (r :?> ParseFailure<'S, 'A>).Cast() :> ParseResult<'S, _> }
+  member this.Handle(f: ParseFailure<'S, _> -> Parser<'S, _>) =
     { new Parser<'S, _>() with
       member x.Apply(s, vs) =
-        this.Apply(s, vs) |> Free.bind (function
+        this.Apply(s, vs) |> function
           | :? Error<'S, 'A> as e -> (f e).Apply(s, vs)
           | :? Fail<'S, 'A> as r ->
-            (f r).Apply(s, vs) |> Free.map (function
+            (f r).Apply(s, vs) |> function
               | :? Fail<'S, 'A> as e ->
                 let msg = e.Message |> Option.orElse (fun () -> r.Message)
                 let aux = if e.Message |> Option.isSome then e.Aux else r.Aux
-                Fail(msg, aux, Set.union r.Expected e.Expected) :> ParseResult<_, _>
-              | rr -> rr)
-          | r -> Trampoline.suspend (fun () -> Trampoline.delay (fun () -> r))) }
+                Fail(msg, aux, Set.union r.Expected e.Expected) :> ParseResult<'S, _>
+              | rr -> rr
+          | r -> r }
   interface _1<Parser, 'A>
 
 module ParseState =
@@ -295,10 +293,10 @@ module ParseState =
 module Parser =
 
   let apply f = { new Parser<_, _>() with
-    member this.Apply(s, vs) = Trampoline.suspend (fun () -> Trampoline.delay (fun () -> f s vs)) }
+    member this.Apply(s, vs) = f s vs }
 
   let run s vs (p: Parser<'S, 'A>) =
-    match p.Apply(s, vs) |> Free.run F0.functor_ Free.castF0 with
+    match p.Apply(s, vs) with
     | :? Pure<'S, 'A> as p -> Choice1Of2(s, p.Extract)
     | :? Commit<'S, 'A> as c -> Choice1Of2(c.S, c.Extract)
     | :? Fail<'S, 'A> as f -> Choice2Of2(Error.report s.Pos f.Message f.Aux f.Expected)
@@ -314,9 +312,9 @@ module Parser =
 
   let wouldSucceed<'S> = { new Parser<'S, bool>() with
     member this.Apply(s, vs) =
-      this.Apply(s, vs) |> Free.map (function
+      this.Apply(s, vs) |> function
         | :? ParseFailure<'S, bool> -> Pure(false, Fail(None, [], Set.empty)) :> ParseResult<_, _>
-        | _ -> Pure(true, Fail(None, [], Set.empty)) :> ParseResult<_, _>) }
+        | _ -> Pure(true, Fail(None, [], Set.empty)) :> ParseResult<_, _> }
 
   let inline race q (p: Parser<_, _>) = p.Race(q)
   let inline scope desc (p: Parser<_, _>) = p.Scope(desc)
@@ -325,27 +323,24 @@ module Parser =
   let inline pnot (p: Parser<_, _>) = p.Not()
   let inline slice (p: Parser<_, _>) = p.Slice()
 
-  let point (F0 f) =
-    { new Parser<_, _>() with
+  let point (F0 f) : Parser<'S, _> =
+    { new Parser<'S, _>() with
       member this.Apply(_, _) =
-        Trampoline.suspend
-          (fun () -> Trampoline.delay (fun () ->
-            Pure(f.Apply(), Fail(None, [], Set.empty))
-            :> ParseResult<_, _>)) }
+        Pure(f.Apply(), Fail(None, [], Set.empty))
+        :> ParseResult<'S, _> }
 
-  let monad = { new Monad<Parser>() with
+  let monad<'S> = { new Monad<Parser>() with
     member this.Point(StdF0 f) =
-      point f :> _1<Parser, _>
+      let a: Parser<'S, _> = point f in a :> _1<Parser, _>
     override this.Map(f, m) =
-      map f (m :?> Parser<_, _>) :> _1<_, _>
+      map f (m :?> Parser<'S, _>) :> _1<_, _>
     member this.Bind(StdF1 f, m) =
-      bind (f >> fun x -> x :?> Parser<_, _>) (m :?> Parser<_, _>) :> _1<_, _> }
+      bind (f >> fun x -> x :?> Parser<'S, _>) (m :?> Parser<'S, _>) :> _1<_, _> }
 
   type private UnitP<'F, 'A>(a: 'A) =
     inherit Parser<'F, 'A>()
     override this.Apply(s, vs) =
-      Trampoline.suspend
-        (fun () ->Trampoline.delay (fun () -> Pure(a, Fail(None, [], Set.empty)) :> ParseResult<_, _>))
+      Pure(a, Fail(None, [], Set.empty)) :> ParseResult<_, _>
     override this.Map(f) = UnitP(f a) :> _1<Parser, _>
     override this.Bind(f) = f a
 
@@ -388,8 +383,8 @@ module Parser =
   let setBol b =
     gets (fun x -> x.Bol)
     >>= fun old ->
-      (modify (fun s -> ParseState(s.Pos, s.Input, s.Offset, s.S, s.LayoutStack, b))).When(old <> b)
-      :?> Parser<_, _>
+      (modify (fun (s: ParseState<'S>) -> ParseState(s.Pos, s.Input, s.Offset, s.S, s.LayoutStack, b))).When(old <> b)
+      :?> Parser<'S, _>
 
   let satisfy p = setBol false >>= fun () -> rawSatisfy p
 
@@ -425,18 +420,19 @@ module Parser =
 
   let rawNewline<'S> : Parser<'S, char> = rawSatisfy ((=) '\n') |> scope "newline"
 
-  let rawString (s: string) =
+  let rawString (s: string) : Parser<'S, string> =
     s.ToCharArray()
     |> Array.toList
     |> List.ofStdList
-    |> Traverse.traverse List.traverse monad (pchar >> fun x -> x :> _1<_, _>)
-    :?> Parser<_, _>
+    |> Traverse.traverse List.traverse monad<'S> (pchar >> fun (x: Parser<'S, char>) -> x :> _1<_, char>)
+    :?> Parser<'S, _1<List, char>>
+    |>> fun x -> x :?> List<_>
     |> attemptScope ("\"" + s + "\"")
-    |> fun p -> p.As(s)
-    :?> Parser<_, _>
+    |> fun (p: Parser<'S, List<char>>) -> p.As(s)
+    :?> Parser<'S, string>
 
-  let pstring s =
-    stillOnside
+  let pstring s : Parser<'S, string> =
+    stillOnside<'S>
     >>= fun ()-> rawString s
     >>= fun s -> setBol false >>= fun () -> unit s
 
@@ -470,7 +466,7 @@ module Parser =
   let rec private blockComment<'T> : Parser<'T, bool> =
     let rec restComment hadnl =
       (rawString "-}" |> attempt).As(hadnl) :?> Parser<'T, _> <|>
-      (blockComment >>= restComment) <|>
+      (blockComment<'T> >>= restComment) <|>
       ((rawSatisfy((<>) '\n').As(hadnl) :?> Parser<'T, _> <|> (rawNewline.As(true) :?> Parser<'T, _>)) >>= restComment)
     rawString "{-"
     |> attempt
@@ -511,14 +507,14 @@ module Parser =
           else if spaced then unit WhiteSpace
           else (setBol false).As(Other) :?> Parser<_, _>))
 
-  let rec whiteSpace spaced side =
-    comment.As(true) :?> Parser<_, _>
+  let rec whiteSpace spaced side : Parser<'S, _> =
+    comment<'S>.As(true) :?> Parser<'S, _>
     <|> blockComment
-    <|> (rawNewline.As(true) :?> Parser<_, _>)
-    <|> (someRealWhitespace.As(false) :?> Parser<_, _>)
+    <|> (rawNewline<'S>.As(true) :?> Parser<'S, _>)
+    <|> (someRealWhitespace<'S>.As(false) :?> Parser<'S, _>)
     |> scope "whitespace"
     |> fun p ->
-      p.Many() :?> Parser<_, _> |> bind (function
+      p.Many() :?> Parser<'S, _> |> bind (function
         | [] when side -> offside spaced
         | [] -> onside spaced
         | xs when xs |> List.fold (||) side -> offside true
