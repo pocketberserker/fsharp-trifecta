@@ -162,7 +162,7 @@ and [<AbstractClass>] Parser<'S, 'A>() =
       member x.Apply(s, vs) = this.Apply(s, vs) |> Free.map (fun x -> x.Map(f) :?> ParseResult<_, _>) }
     :> _1<_, _>
   override this.Bind(f) =
-    { new Parser<_, _>() with
+    { new Parser<'S, _>() with
       member x.Apply(s, vs) =
         this.Apply(s, vs) |> Free.bind (function
           | :? Pure<'S, 'A> as r -> (f r.Extract :?> Parser<_, _>).Apply(s, vs) |> Free.map (function
@@ -181,7 +181,7 @@ and [<AbstractClass>] Parser<'S, 'A>() =
           | r -> Trampoline.delay (fun () -> (r :?> ParseFailure<_, _>).Cast() :> ParseResult<_, _>)) }
     :> _1<_, _>
   override this.WithFilter(pred) =
-    { new Parser<_, _>() with
+    { new Parser<'S, _>() with
       member x.Apply(s, vs) =
         this.Apply(s, vs) |> Free.map (function
           | :? Pure<'S, 'A> as p when not <| pred p.Extract -> p.Last :> ParseResult<_, _>
@@ -208,15 +208,15 @@ and [<AbstractClass>] Parser<'S, 'A>() =
           | r -> r) }
     :> _1<_, _>
   member this.ApplyF(f: ParseState<_> -> Supply -> ParseResult<_, _>) =
-    { new Parser<_, _>() with
+    { new Parser<'S, _>() with
       member x.Apply(s, vs) = Trampoline.delay (fun () -> f s vs) }
   override this.When(b) =
     if b then this.Skip()
     else this.ApplyF(fun _ _ -> Pure((), Fail(None, [], Set.empty)) :> ParseResult<_, _>) :> _1<_, _>
-  override this.LiftF(f) = f :?> Parser<_, _> :> Filtered<_, _>
-  override this.LiftM(m) = m :?> Parser<_, _> :> Monadic<_, _>
-  override this.LiftAl(a) = a :?> Parser<_, _> :> Alternating<_, _>
-  override this.LiftMp(m) = m :?> Parser<_, _> :> MonadicPlus<_, _>
+  override this.LiftF(f) = f :?> Parser<'S, _> :> Filtered<_, _>
+  override this.LiftM(m) = m :?> Parser<'S, _> :> Monadic<_, _>
+  override this.LiftAl(a) = a :?> Parser<'S, _> :> Alternating<_, _>
+  override this.LiftMp(m) = m :?> Parser<'S, _> :> MonadicPlus<_, _>
   member this.Race(p: Parser<_, _>) =
     { new Parser<'S, 'A>() with
       member x.Apply(s, vs) =
@@ -238,7 +238,7 @@ and [<AbstractClass>] Parser<'S, 'A>() =
               | r -> r)
           | r -> Trampoline.delay (fun () -> r)) }
   member this.Scope(desc) =
-    { new Parser<_, _>() with
+    { new Parser<'S, _>() with
       member x.Apply(s, vs) =
         this.Apply(s, vs) |> Free.map (function
           | :? Fail<'S, 'A> as f -> Fail(f.Message, f.Aux, Set.empty |> Set.add desc) :> ParseResult<_, _>
@@ -248,27 +248,27 @@ and [<AbstractClass>] Parser<'S, 'A>() =
             Pure(p.Extract, Fail(p.Last.Message, p.Last.Aux, Set.empty |> Set.add desc)) :> ParseResult<_, _>
           | r -> r) }
   member this.Attempt() =
-    { new Parser<_, _>() with
+    { new Parser<'S, _>() with
       member x.Apply(s, vs) =
         this.Apply(s, vs) |> Free.map (function
           | :? Error<'S, 'A> as e -> Fail(None, [e.Pretty], Set.empty) :> ParseResult<_, _>
           | r -> r) }
   member this.Not() =
-    { new Parser<_, _>() with
+    { new Parser<'S, _>() with
       member x.Apply(s, vs) =
         this.Apply(s, vs) |> Free.map (function
           | :? Pure<'S, 'A> as p -> Fail(Some((DocText "") <+> (DocText(p.Extract.ToString()))), [], Set.empty) :> ParseResult<_, _>
           | :? Commit<'S, 'A> as c -> Error.report c.Pos (Some((DocText "") <+> (DocText(c.Extract.ToString())))) [] Set.empty :> ParseResult<_, _>
           | _ -> Pure((), Fail(None, [], Set.empty)) :> ParseResult<_, _>) }
   member this.Slice() =
-    { new Parser<_, _>() with
+    { new Parser<'S, _>() with
       member x.Apply(s, vs) =
         this.Apply(s, vs) |> Free.map (function
           | :? Pure<'S, 'A> as p -> Pure("", Fail(p.Last.Message, p.Last.Aux, p.Last.Expected)) :> ParseResult<_, _>
           | :? Commit<'S, 'A> as c -> Commit(c.S, s.Input.Substring(s.Offset, c.S.Offset), c.Expected) :> ParseResult<_, _>
           | r -> (r :?> ParseFailure<'S, 'A>).Cast() :> ParseResult<_, _>) }
   member this.Handle(f: ParseFailure<_, _> -> Parser<_, _>) =
-    { new Parser<_, _>() with
+    { new Parser<'S, _>() with
       member x.Apply(s, vs) =
         this.Apply(s, vs) |> Free.bind (function
           | :? Error<'S, 'A> as e -> (f e).Apply(s, vs)
@@ -295,12 +295,12 @@ module Parser =
   let apply f = { new Parser<_, _>() with
     member this.Apply(s, vs) = Trampoline.delay (fun () -> f s vs) }
 
-  let run s vs (p: Parser<_, _>) =
+  let run s vs (p: Parser<'S, 'A>) =
     match p.Apply(s, vs) |> Free.run F0.functor_ Free.castF0 with
-    | :? Pure<'S, _> as p -> Choice1Of2(s, p.Extract)
-    | :? Commit<'S, _> as c -> Choice1Of2(c.S, c.Extract)
-    | :? Fail<'S, _> as f -> Choice2Of2(Error.report s.Pos f.Message f.Aux f.Expected)
-    | _ as e -> Choice2Of2(e :?> Error<_, _>)
+    | :? Pure<'S, 'A> as p -> Choice1Of2(s, p.Extract)
+    | :? Commit<'S, 'A> as c -> Choice1Of2(c.S, c.Extract)
+    | :? Fail<'S, 'A> as f -> Choice2Of2(Error.report s.Pos f.Message f.Aux f.Expected)
+    | _ as e -> Choice2Of2(e :?> Error<'S, 'A>)
 
   let inline bind (f: 'A -> Parser<'F, 'B>) (p: Parser<'F, 'A>) = p.Bind(f >> (fun x -> x :> _1<Parser, 'B>)) :?> Parser<'F, 'B>
   let inline (>>=) p f = bind f p
@@ -373,9 +373,9 @@ module Parser =
       if p c then Commit(ParseState(s.Pos.Bump(c, si, sop), s.Input, sop, s.S, s.LayoutStack, s.Bol), c, Set.empty) :> ParseResult<_, _>
       else Fail(None, [], Set.empty) :> ParseResult<_, _>)
 
-  let setBol<'T> b = parser {
+  let setBol b = parser {
     let! old = gets (fun x -> x.Bol)
-    return! (modify (fun (s: ParseState<'T>) -> ParseState(s.Pos, s.Input, s.Offset, s.S, s.LayoutStack, b))).When(old <> b) :?> Parser<'T, _>
+    return! (modify (fun s -> ParseState(s.Pos, s.Input, s.Offset, s.S, s.LayoutStack, b))).When(old <> b) :?> Parser<_, _>
   }
 
   let satisfy p = setBol false >>= fun () -> rawSatisfy p
@@ -455,8 +455,8 @@ module Parser =
     rawString "--"
     |> attempt
     >>= fun x -> parser {
-      do! (rawSatisfy ((<>) '\n')).SkipMany() :?> Parser<_, _>
-      do!  rawNewline |>> ignore <|> realEOF
+      do! (rawSatisfy ((<>) '\n')).SkipMany() :?> Parser<'T, _>
+      do!  rawNewline |>> ignore <|> realEOF<'T>
       return! unit ()
     }
 
@@ -472,7 +472,7 @@ module Parser =
 
   let private someRealWhitespace<'T> : Parser<'T, unit> =
     (rawSatisfy (fun x -> Char.IsWhiteSpace(x) && x <> '\n')).SkipSome()
-    :?> Parser<_, _>
+    :?> Parser<'T, _>
 
   // TODO: move ParseState
   let layoutEndsWith (s: ParseState<_>) : Parser<'S, unit> =
@@ -535,7 +535,7 @@ module Parser =
       | _ -> onside spaced)
 
   let layout<'T> : Parser<'T, Token> =
-    get >>= fun s -> whiteSpace false s.Bol
+    get<'T> >>= fun s -> whiteSpace false s.Bol
 
   let virtualLeftBrace n =
     modify (fun s ->
@@ -544,7 +544,7 @@ module Parser =
   let inline praise p doc extra = Diagnostic.raise diagnostic p doc extra :?> Parser<_, _>
 
   let virtualRightBrace<'T> : Parser<'T, unit> =
-    get >>= (fun s ->
+    get<'T> >>= (fun s ->
       layout.FlatMatch(function
         | VBrace -> Some (unit (unit ()) :> _1<_, _>)
         | VSemi ->
@@ -559,11 +559,11 @@ module Parser =
               return!
                 Diagnostic.raiseWhen monad diagnostic
                   (List.isEmpty sp.LayoutStack || match List.head sp.LayoutStack with BracedLayout _ -> true | _ -> false) sp.Pos (DocText "panic: incorrect layout context for virtual right brace") []
-                :?> Parser<_, _>
+                :?> Parser<'T, _>
                 |>> fun () -> modify (fun s -> ParseState(s.Pos, s.Input, s.Offset, s.S, List.tail sp.LayoutStack, s.Bol))
             }
           Some (p :> _1<_, _>))
-      :?> Parser<_, _>
+      :?> Parser<'T, _>
       |> attemptScope (s.LayoutStack |> List.tryPick (function
         | BracedLayout(l, _, _, r) -> Some ("end of layout (between '" + l + "' and '" + r + "')")
         | _ -> None) |> Option.getOrElse "end of layout"))
@@ -582,7 +582,7 @@ module Parser =
   let fail doc = Diagnostic.fail diagnostic (DocText doc)
 
   let optionalSpace<'T> : Parser<'T, unit> =
-    layout.FlatMatch(function
+    layout<'T>.FlatMatch(function
       | WhiteSpace -> Some (unit () :> _1<_, _>)
       | Other -> Some (unit () :> _1<_, _>)
       | VSemi -> Some (fail "vsemi in optional space")
@@ -590,9 +590,9 @@ module Parser =
     :?> Parser<'T, _>
     |> attemptScope "whitespace"
 
-  let token (p: unit -> Parser<_, _>) =
-    optionalSpace.SkipOptional
-    :?> Parser<_, _>
+  let token<'T, 'U> (p: unit -> Parser<'T, 'U>) =
+    optionalSpace<'T>.SkipOptional
+    :?> Parser<'T, _>
     >>= p
 
   let leftToken ld rd = left (token (fun () -> pstring ld)) ("'" + ld + "'") (rawString rd) ("'" + rd + "'")
@@ -603,7 +603,7 @@ module Parser =
   let leftEnvelope<'T> : Parser<'T, _> = leftToken "[|" "|]"
 
   let right<'T> : Parser<'T, unit> =
-    get >>= (fun s ->
+    get<'T> >>= (fun s ->
       match s.LayoutStack with
       | (BracedLayout(_,p,missing,r) as b) :: xs ->
         ( p.Scope(r) >>= fun _ ->
@@ -613,16 +613,16 @@ module Parser =
       | stk -> praise s.Pos (DocText ("panic: expected braced layout, but found: " + String.Join(",", stk))) [])
 
   let semi<'T> : Parser<'T, char> =
-    layout.FlatMatch(function
+    layout<'T>.FlatMatch(function
       | Other -> Some (token (fun () -> pchar ';') :> _1<_, _>)
       | VSemi -> Some (unit ';' :> _1<_, _>)
       | _ -> None)
     :?> Parser<'T, _>
     |> attemptScope "semicolon"
 
-  let eofIgnoringLayout<'T> : Parser<'T, unit> = realEOF
+  let eofIgnoringLayout<'T> : Parser<'T, unit> = realEOF<'T>
 
-  let eof<'T> : Parser<'T, unit> = realEOF.Scope("eof") :?> Parser<_, _>
+  let eof<'T> : Parser<'T, unit> = realEOF<'T>.Scope("eof")
 
   let brace (p: Parser<_, _>) = Applied.between p leftBrace right :?> Parser<_, _>
 
@@ -663,38 +663,38 @@ module Parser =
     token (fun () -> Applied.between charChar (pchar '\'') (pchar '\'') :?> Parser<_, _>) |> scope "character literal"
 
   let stringLiteral<'T> : Parser<'T, string> =
-    token (fun () ->
-      Applied.between (stringChar.Many() :?> Parser<'T, char option list>) (pchar '"') (pchar '"') :?> Parser<'T, char option list>
+    let f () =
+      Applied.between (stringChar<'T>.Many() :?> Parser<'T, char option list>) (pchar '"') (pchar '"') :?> Parser<'T, char option list>
       |>> (fun s ->
         //_.sequence[Option,Char].getOrElse(List()).mkString
         System.String(List.foldBack (fun x acc -> match acc, x with | Some acc, Some x -> Some (x :: acc) | _ -> None) s None |> Option.getOrElse [] |> List.toArray))
-    |> scope "string literal")
+    token (f >> scope "string literal")
 
   // TODO: inverseStringLiteral
 
   let doubleLiteral_<'T> : Parser<'T, float> =
-    (digit.SkipSome() :?> Parser<_, _>
+    (digit<'T>.SkipSome() :?> Parser<'T, _>
     >>= fun () ->
-      (((pchar '.' >>= fun _ -> digit.SkipMany() :?> Parser<_, _>)
+      (((pchar '.' >>= fun _ -> digit<'T>.SkipMany() :?> Parser<'T, _>)
         >>= fun () ->
-          (pchar 'e' >>= fun _ -> digit.SkipSome() :?> Parser<_, _>).SkipOptional :?> Parser<_, _>)
-      <|> ((pchar 'e' >>= fun _ -> digit.SkipSome() :?> Parser<_, _>))))
+          (pchar 'e' >>= fun _ -> digit<'T>.SkipSome() :?> Parser<'T, _>).SkipOptional :?> Parser<'T, _>)
+      <|> ((pchar 'e' >>= fun _ -> digit<'T>.SkipSome() :?> Parser<'T, _>))))
     |> attempt
     |> slice
     |>> float
-  let doubleLiteral<'T> : Parser<'T, float> = token (fun () -> doubleLiteral_)
+  let doubleLiteral<'T> : Parser<'T, float> = token (fun () -> doubleLiteral_<'T>)
 
   // TODO: dateLiteral_
   // TODO: dateLiteral
 
-  let nat_<'T> : Parser<'T, int64> = digit.SkipSome() :?> Parser<_, _> |> slice |>> int64
-  let nat<'T> : Parser<'T, int64> = token (fun () -> nat_)
+  let nat_<'T> : Parser<'T, int64> = digit<'T>.SkipSome() :?> Parser<'T, _> |> slice |>> int64
+  let nat<'T> : Parser<'T, int64> = token (fun () -> nat_<'T>)
   let tailChar<'T> : Parser<'T, char> =
     satisfy (fun c -> Char.IsLetter(c) || Char.IsDigit(c) || c = '_' || c = '#' || c = '\'')
   let rawTailChar<'T> : Parser<'T, char> =
     rawSatisfy (fun c -> Char.IsLetter(c) || Char.IsDigit(c) || c = '_' || c = '#' || c = '\'')
-  let identTail<'T> : Parser<'T, unit> = tailChar.SkipMany() :?> Parser<'T, _>
-  let rawIdentTail<'T> : Parser<'T, unit> = rawTailChar.SkipMany() :?> Parser<'T, _>
+  let identTail<'T> : Parser<'T, unit> = tailChar<'T>.SkipMany() :?> Parser<'T, _>
+  let rawIdentTail<'T> : Parser<'T, unit> = rawTailChar<'T>.SkipMany() :?> Parser<'T, _>
 
   let nonopChars = "()[]{};,\"" |> Seq.sort |> Seq.toArray
   let opChars = ":!#$%&*+./<=>?@\\^|-~'`" |> Seq.sort |> Seq.toArray
