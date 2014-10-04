@@ -346,12 +346,13 @@ module Parser =
 
   let unit a = UnitP(a) :> Parser<_, _>
 
-  type ParserBuilder () =
-    member this.Return(x) = unit x
-    member this.ReturnFrom(x: Parser<_, _>) = x
-    member this.Bind(x, f) = x >>= f
-
-  let parser = ParserBuilder()
+// FIXME: type parameter
+//  type ParserBuilder () =
+//    member this.Return(x) = unit x
+//    member this.ReturnFrom(x: Parser<_, _>) = x
+//    member this.Bind(x, f) = x >>= f
+//
+//  let parser = ParserBuilder()
 
   let diagnostic = { new Diagnostic<Parser>() with
     member this.Empty() =
@@ -378,10 +379,11 @@ module Parser =
       if p c then Commit(ParseState(s.Pos.Bump(c, si, sop), s.Input, sop, s.S, s.LayoutStack, s.Bol), c, Set.empty) :> ParseResult<_, _>
       else Fail(None, [], Set.empty) :> ParseResult<_, _>)
 
-  let setBol b = parser {
-    let! old = gets (fun x -> x.Bol)
-    return! (modify (fun s -> ParseState(s.Pos, s.Input, s.Offset, s.S, s.LayoutStack, b))).When(old <> b) :?> Parser<_, _>
-  }
+  let setBol b =
+    gets (fun x -> x.Bol)
+    >>= fun old ->
+      (modify (fun s -> ParseState(s.Pos, s.Input, s.Offset, s.S, s.LayoutStack, b))).When(old <> b)
+      :?> Parser<_, _>
 
   let satisfy p = setBol false >>= fun () -> rawSatisfy p
 
@@ -404,18 +406,15 @@ module Parser =
 
   let guard b = Diagnostic.guard monad diagnostic b :?> Parser<_, _>
 
-  let stillOnside<'T> : Parser<'T, unit> = parser {
-    let! b = gets (fun (s: ParseState<'T>) -> not s.Bol || s.Pos.Column > s.Depth)
-    return! guard b
-  }
+  let stillOnside<'T> : Parser<'T, unit> =
+    gets (fun (s: ParseState<'T>) -> not s.Bol || s.Pos.Column > s.Depth)
+    >>= fun b -> guard b
 
   let rawChar (c: char) = rawSatisfy ((=) c) |> scope ("'" + string c + "'")
-  let pchar c = parser {
-    do! stillOnside
-    let! c = rawChar c
-    do! setBol false
-    return c
-  }
+  let pchar c =
+    stillOnside
+    >>= fun ()-> rawChar c
+    >>= fun c -> setBol false >>= fun () -> unit c
 
   let rawNewline<'S> : Parser<'S, char> = rawSatisfy ((=) '\n') |> scope "newline"
 
@@ -429,12 +428,10 @@ module Parser =
     |> fun p -> p.As(s)
     :?> Parser<_, _>
 
-  let pstring s = parser {
-    do! stillOnside
-    let! s = rawString s
-    do! setBol false
-    return s
-  }
+  let pstring s =
+    stillOnside
+    >>= fun ()-> rawString s
+    >>= fun s -> setBol false >>= fun () -> unit s
 
   open System
 
@@ -447,33 +444,30 @@ module Parser =
 
   let private pushContext ctx = modify (fun s -> ParseState(s.Pos, s.Input, s.Offset, s.S, ctx :: s.LayoutStack, s.Bol))
 
-  let private popContext msg f = parser {
-    let! u = get
-    return!
+  let private popContext msg f =
+    get
+    >>= fun u ->
       if not <| List.isEmpty u.LayoutStack then
         loc
         >>= fun l -> put (ParseState(u.Pos, u.Input, u.Offset, u.S, u.LayoutStack |> List.tail, u.Bol))
       else empty
-  }
 
   let private comment<'T> : Parser<'T, unit> =
     rawString "--"
     |> attempt
-    >>= fun x -> parser {
-      do! (rawSatisfy ((<>) '\n')).SkipMany() :?> Parser<'T, _>
-      do!  rawNewline |>> ignore <|> realEOF<'T>
-      return! unit ()
-    }
+    >>= fun x ->
+      (rawSatisfy ((<>) '\n')).SkipMany() :?> Parser<'T, _>
+      >>= fun () -> rawNewline |>> ignore <|> realEOF<'T>
+      >>= unit
 
   let rec private blockComment<'T> : Parser<'T, bool> =
     let rec restComment hadnl =
       (rawString "-}" |> attempt).As(hadnl) :?> Parser<'T, _> <|>
       (blockComment >>= restComment) <|>
       ((rawSatisfy((<>) '\n').As(hadnl) :?> Parser<'T, _> <|> (rawNewline.As(true) :?> Parser<'T, _>)) >>= restComment)
-    parser {
-      let! _ = rawString "{-" |> attempt
-      return! restComment(false)
-    }
+    rawString "{-"
+    |> attempt
+    >>= fun _ -> restComment false
 
   let private someRealWhitespace<'T> : Parser<'T, unit> =
     (rawSatisfy (fun x -> Char.IsWhiteSpace(x) && x <> '\n')).SkipSome()
@@ -557,32 +551,32 @@ module Parser =
           Some (p :> _1<_, _>)
         | Other | WhiteSpace ->
           let p: Parser<'T, Parser<'T, unit>> =
-            parser {
-              let! sp = get
-              let! b = layoutEndsWith sp >>= fun () -> wouldSucceed
-              do! Diagnostic.failUnless monad diagnostic b (DocText "end of layout not found") :?> Parser<_, _>
-              return!
-                Diagnostic.raiseWhen monad diagnostic
-                  (List.isEmpty sp.LayoutStack || match List.head sp.LayoutStack with BracedLayout _ -> true | _ -> false) sp.Pos (DocText "panic: incorrect layout context for virtual right brace") []
-                :?> Parser<'T, _>
-                |>> fun () -> modify (fun s -> ParseState(s.Pos, s.Input, s.Offset, s.S, List.tail sp.LayoutStack, s.Bol))
-            }
+            get
+            >>= fun sp ->
+              layoutEndsWith sp >>= fun () -> wouldSucceed
+              >>= fun b ->
+                Diagnostic.failUnless monad diagnostic b (DocText "end of layout not found") :?> Parser<_, _>
+                >>= fun () ->
+                  Diagnostic.raiseWhen monad diagnostic
+                    (List.isEmpty sp.LayoutStack || match List.head sp.LayoutStack with BracedLayout _ -> true | _ -> false) sp.Pos (DocText "panic: incorrect layout context for virtual right brace") []
+                  :?> Parser<'T, _>
+                  |>> fun () -> modify (fun s -> ParseState(s.Pos, s.Input, s.Offset, s.S, List.tail sp.LayoutStack, s.Bol))
           Some (p :> _1<_, _>))
       :?> Parser<'T, _>
       |> attemptScope (s.LayoutStack |> List.tryPick (function
         | BracedLayout(l, _, _, r) -> Some ("end of layout (between '" + l + "' and '" + r + "')")
         | _ -> None) |> Option.getOrElse "end of layout"))
 
-  let left lp ld rp rd = parser {
-    let! start = loc
-    let! _ = scope ld lp
-    return!
-      modify (fun s ->
-        ParseState(s.Pos, s.Input, s.Offset, s.S,
-          BracedLayout(ld, scope rd rp |>> box, (apply (fun s _ ->
-            let f = Fail(None, [start.Report(DocText ("note: unmatched " + ld), Array.empty)], Set.empty |> Set.add rd)
-            f :> ParseResult<_, _>)), rd) :: s.LayoutStack, s.Bol))
-  }
+  let left lp ld rp rd =
+    loc
+    >>= fun start ->
+      scope ld lp
+      >>= fun _ ->
+        modify (fun s ->
+          ParseState(s.Pos, s.Input, s.Offset, s.S,
+            BracedLayout(ld, scope rd rp |>> box, (apply (fun s _ ->
+              let f = Fail(None, [start.Report(DocText ("note: unmatched " + ld), Array.empty)], Set.empty |> Set.add rd)
+              f :> ParseResult<_, _>)), rd) :: s.LayoutStack, s.Bol))
 
   let fail doc = Diagnostic.fail diagnostic (DocText doc)
 
