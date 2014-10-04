@@ -325,16 +325,21 @@ module Parser =
   let inline pnot (p: Parser<_, _>) = p.Not()
   let inline slice (p: Parser<_, _>) = p.Slice()
 
+  let point (F0 f) =
+    { new Parser<_, _>() with
+      member this.Apply(_, _) =
+        Trampoline.suspend
+          (fun () -> Trampoline.delay (fun () ->
+            Pure(f.Apply(), Fail(None, [], Set.empty))
+            :> ParseResult<_, _>)) }
+
   let monad = { new Monad<Parser>() with
-    member this.Point(f) =
-      { new Parser<_, _>() with
-        member this.Apply(_, _) =
-          Trampoline.suspend
-            (fun () -> Trampoline.delay (fun () -> Pure(f.Apply(), Fail(None, [], Set.empty)) :> ParseResult<_, _>))
-        }
-      :> _1<Parser, _>
-    override this.Map(f, m) = map f (m :?> Parser<_, _>) :> _1<_, _>
-    member this.Bind(StdF1 f, m) = bind (f >> fun x -> x :?> Parser<_, _>) (m :?> Parser<_, _>) :> _1<_, _> }
+    member this.Point(StdF0 f) =
+      point f :> _1<Parser, _>
+    override this.Map(f, m) =
+      map f (m :?> Parser<_, _>) :> _1<_, _>
+    member this.Bind(StdF1 f, m) =
+      bind (f >> fun x -> x :?> Parser<_, _>) (m :?> Parser<_, _>) :> _1<_, _> }
 
   type private UnitP<'F, 'A>(a: 'A) =
     inherit Parser<'F, 'A>()
@@ -406,8 +411,7 @@ module Parser =
   let handle f (p: Parser<_, _>) = p.Handle(f)
   let notFollowedBy p = pnot p
 
-  let guard b = //Diagnostic.guard monad diagnostic b :?> Parser<_, _>
-    if b then Applicative.point monad (fun () -> ()) :?> Parser<_, _> else empty
+  let guard b = if b then point (fun () -> ()) else empty
 
   let stillOnside<'T> : Parser<'T, unit> =
     gets (fun (s: ParseState<'T>) -> not s.Bol || s.Pos.Column > s.Depth)
