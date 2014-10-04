@@ -305,7 +305,7 @@ module Parser =
   let inline bind (f: 'A -> Parser<'F, 'B>) (p: Parser<'F, 'A>) = p.Bind(f >> (fun x -> x :> _1<Parser, 'B>)) :?> Parser<'F, 'B>
   let inline (>>=) p f = bind f p
 
-  let map (f: 'A -> 'B) (p: Parser<'F, 'A>) = p.Map(f) :?> Parser<'F, 'B>
+  let inline map (f: 'A -> 'B) (p: Parser<'F, 'A>) = p.Map(f) :?> Parser<'F, 'B>
   let inline (|>>) p f = map f p
 
   let inline (<|>) (p1: Parser<'F, 'A>) (p2: Parser<'F, 'A>) = p1.Or(p2 :> _1<Parser, 'A>) :?> Parser<'F, 'A>
@@ -319,7 +319,7 @@ module Parser =
   let inline race q (p: Parser<_, _>) = p.Race(q)
   let inline scope desc (p: Parser<_, _>) = p.Scope(desc)
   let inline attempt (p: Parser<_, _>) = p.Attempt()
-  let attemptScope s (p: Parser<_, _>) = p.Attempt().Scope(s)
+  let inline attemptScope s (p: Parser<_, _>) = p.Attempt().Scope(s)
   let inline pnot (p: Parser<_, _>) = p.Not()
   let inline slice (p: Parser<_, _>) = p.Slice()
 
