@@ -354,13 +354,14 @@ module Parser =
 //
 //  let parser = ParserBuilder()
 
-  let diagnostic = { new Diagnostic<Parser>() with
-    member this.Empty() =
-      apply (fun _ _ -> Fail(None, [], Set.empty) :> ParseResult<_, _>) :> _1<Parser, _>
-    member this.Fail(msg) =
-      apply (fun _ _ -> Fail(Some msg, [], Set.empty) :> ParseResult<_, _>) :> _1<Parser, _>
-    override this.Raise(p, d, aux) =
-      apply (fun _ _ -> Error.report p (Some d) aux Set.empty :> ParseResult<_, _>) :> _1<Parser, _> }
+// FIXME: type parameter
+//  let diagnostic = { new Diagnostic<Parser>() with
+//    member this.Empty() =
+//      apply (fun _ _ -> Fail(None, [], Set.empty) :> ParseResult<_, _>) :> _1<Parser, _>
+//    member this.Fail(msg) =
+//      apply (fun _ _ -> Fail(Some msg, [], Set.empty) :> ParseResult<_, _>) :> _1<Parser, _>
+//    override this.Raise(p, d, aux) =
+//      apply (fun _ _ -> Error.report p (Some d) aux Set.empty :> ParseResult<_, _>) :> _1<Parser, _> }
 
   let get<'T> = apply (fun s _ -> Pure(s, Fail(None, [], Set.empty)) :> ParseResult<'T, ParseState<'T>>)
   let gets f = apply (fun s _ -> Pure(f s, Fail(None, [], Set.empty)) :> ParseResult<_, _>)
@@ -394,7 +395,8 @@ module Parser =
   let warn msg = apply (fun s _ -> printfn "%s" (msg.ToString()); Pure((), Fail(None, [], Set.empty)) :> ParseResult<_, _>)
   let info msg = apply (fun s _ -> printfn "%s" (msg.ToString()); Pure((), Fail(None, [], Set.empty)) :> ParseResult<_, _>)
   
-  let empty<'T, 'U> = Diagnostic.empty diagnostic :?> Parser<'T, 'U>
+  let empty<'T, 'U> =
+    apply (fun _ _ -> Fail(None, [], Set.empty) :> ParseResult<'T, 'U>)
   let choice xs = List.foldBack (<|>) xs empty
   let assert_ p = if p then unit () else empty
   let liftOption = function
@@ -404,7 +406,8 @@ module Parser =
   let handle f (p: Parser<_, _>) = p.Handle(f)
   let notFollowedBy p = pnot p
 
-  let guard b = Diagnostic.guard monad diagnostic b :?> Parser<_, _>
+  let guard b = //Diagnostic.guard monad diagnostic b :?> Parser<_, _>
+    if b then Applicative.point monad (fun () -> ()) :?> Parser<_, _> else empty
 
   let stillOnside<'T> : Parser<'T, unit> =
     gets (fun (s: ParseState<'T>) -> not s.Bol || s.Pos.Column > s.Depth)
@@ -540,7 +543,23 @@ module Parser =
     modify (fun s ->
       ParseState(s.Pos, s.Input, s.Offset, s.S, IndentedLayout (max s.Pos.Column s.Depth, n) :: s.LayoutStack, s.Bol))
 
-  let inline praise p doc extra = Diagnostic.raise diagnostic p doc extra :?> Parser<_, _>
+  let inline praise p doc extra =
+    apply (fun _ _ -> Error.report p (Some doc) extra Set.empty :> ParseResult<_, _>)
+
+  let fail doc =
+    apply (fun _ _ -> Fail(Some (DocText doc), [], Set.empty) :> ParseResult<_, _>)
+
+  let failUnless (m: #Monad<_>) b e =
+    if b then Applicative.point m (fun () -> ()) :?> Parser<_, _> else fail e
+
+  let failWhen (m: #Monad<_>) b e =
+    if b then fail e else Applicative.point m (fun () -> ()) :?> Parser<_, _>
+
+  let raiseUnless (m: #Monad<_>) b p e xs =
+    if b then Applicative.point m (fun () -> ())  :?> Parser<_, _> else praise p e xs
+
+  let raiseWhen (m: #Monad<_>) b p e xs =
+    if b then praise p e xs else Applicative.point m (fun () -> ())  :?> Parser<_, _>
 
   let virtualRightBrace<'T> : Parser<'T, unit> =
     get<'T> >>= (fun s ->
@@ -555,9 +574,9 @@ module Parser =
             >>= fun sp ->
               layoutEndsWith sp >>= fun () -> wouldSucceed
               >>= fun b ->
-                Diagnostic.failUnless monad diagnostic b (DocText "end of layout not found") :?> Parser<_, _>
+                failUnless monad b "end of layout not found" :?> Parser<_, _>
                 >>= fun () ->
-                  Diagnostic.raiseWhen monad diagnostic
+                  raiseWhen monad
                     (List.isEmpty sp.LayoutStack || match List.head sp.LayoutStack with BracedLayout _ -> true | _ -> false) sp.Pos (DocText "panic: incorrect layout context for virtual right brace") []
                   :?> Parser<'T, _>
                   |>> fun () -> modify (fun s -> ParseState(s.Pos, s.Input, s.Offset, s.S, List.tail sp.LayoutStack, s.Bol))
@@ -578,14 +597,12 @@ module Parser =
               let f = Fail(None, [start.Report(DocText ("note: unmatched " + ld), Array.empty)], Set.empty |> Set.add rd)
               f :> ParseResult<_, _>)), rd) :: s.LayoutStack, s.Bol))
 
-  let fail doc = Diagnostic.fail diagnostic (DocText doc)
-
   let optionalSpace<'T> : Parser<'T, unit> =
     layout<'T>.FlatMatch(function
       | WhiteSpace -> Some (unit () :> _1<_, _>)
       | Other -> Some (unit () :> _1<_, _>)
-      | VSemi -> Some (fail "vsemi in optional space")
-      | VBrace -> Some (fail "vbrace in optional space"))
+      | VSemi -> Some (fail "vsemi in optional space" :> _1<_, _>)
+      | VBrace -> Some (fail "vbrace in optional space" :> _1<_, _>))
     :?> Parser<'T, _>
     |> attemptScope "whitespace"
 
