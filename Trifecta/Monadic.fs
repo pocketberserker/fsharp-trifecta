@@ -55,7 +55,7 @@ type Alternating<'T, 'A>() =
   abstract member LiftAl: _1<'T, 'B> -> Alternating<'T, 'B>
   abstract member Or: _1<'T, 'A> -> _1<'T, 'A>
   abstract member OrElse: 'A -> _1<'T, 'A>
-  member this.Optiona = this.LiftAl(this.Map(Some)).OrElse(None)
+  member this.Optional = this.LiftAl(this.Map(Some)).OrElse(None)
   member this.SkipOptional = this.LiftAl(this.Skip()).OrElse(())
   member this.Many() = this.LiftAl(this.Some()).OrElse([])
   member this.Some() = this.Map2(this.Many(), fun (a, b) -> a :: b)
