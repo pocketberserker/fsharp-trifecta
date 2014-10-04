@@ -178,7 +178,9 @@ and [<AbstractClass>] Parser<'S, 'A>() =
                 Error.report c.Pos f.Message  f.Aux (Set.union c.Expected f.Expected)
                 :> ParseResult<_, _>
               | r -> r)
-          | r -> Trampoline.delay (fun () -> (r :?> ParseFailure<_, _>).Cast() :> ParseResult<_, _>)) }
+          | r ->
+            Trampoline.suspend
+              (fun () -> Trampoline.delay (fun () -> (r :?> ParseFailure<_, _>).Cast() :> ParseResult<_, _>))) }
     :> _1<_, _>
   override this.WithFilter(pred) =
     { new Parser<'S, _>() with
@@ -198,7 +200,7 @@ and [<AbstractClass>] Parser<'S, 'A>() =
               | :? Fail<'S, 'A> as e -> f ++ e :> ParseResult<_,_>
               | :? Pure<'S, 'A> as p-> Pure(p.Extract, f ++ p.Last) :> ParseResult<_, _>
               | r -> r)
-          | r -> Trampoline.delay (fun () -> r)) }
+          | r -> Trampoline.suspend (fun () -> Trampoline.delay (fun () -> r))) }
     :> _1<_, _>
   override this.OrElse(a) =
     { new Parser<_, _>() with
@@ -236,7 +238,7 @@ and [<AbstractClass>] Parser<'S, 'A>() =
                 | GT -> e
                 :> ParseResult<_, _>
               | r -> r)
-          | r -> Trampoline.delay (fun () -> r)) }
+          | r -> Trampoline.suspend (fun ()-> Trampoline.delay (fun () -> r))) }
   member this.Scope(desc) =
     { new Parser<'S, _>() with
       member x.Apply(s, vs) =
@@ -279,7 +281,7 @@ and [<AbstractClass>] Parser<'S, 'A>() =
                 let aux = if e.Message |> Option.isSome then e.Aux else r.Aux
                 Fail(msg, aux, Set.union r.Expected e.Expected) :> ParseResult<_, _>
               | rr -> rr)
-          | r -> Trampoline.delay (fun () -> r)) }
+          | r -> Trampoline.suspend (fun () -> Trampoline.delay (fun () -> r))) }
   interface _1<Parser, 'A>
 
 module ParseState =
@@ -293,7 +295,7 @@ module ParseState =
 module Parser =
 
   let apply f = { new Parser<_, _>() with
-    member this.Apply(s, vs) = Trampoline.delay (fun () -> f s vs) }
+    member this.Apply(s, vs) = Trampoline.suspend (fun () -> Trampoline.delay (fun () -> f s vs)) }
 
   let run s vs (p: Parser<'S, 'A>) =
     match p.Apply(s, vs) |> Free.run F0.functor_ Free.castF0 with
@@ -327,7 +329,8 @@ module Parser =
     member this.Point(f) =
       { new Parser<_, _>() with
         member this.Apply(_, _) =
-          Trampoline.delay (fun () -> Pure(f.Apply(), Fail(None, [], Set.empty)) :> ParseResult<_, _>)
+          Trampoline.suspend
+            (fun () -> Trampoline.delay (fun () -> Pure(f.Apply(), Fail(None, [], Set.empty)) :> ParseResult<_, _>))
         }
       :> _1<Parser, _>
     override this.Map(f, m) = map f (m :?> Parser<_, _>) :> _1<_, _>
@@ -335,7 +338,9 @@ module Parser =
 
   type private UnitP<'F, 'A>(a: 'A) =
     inherit Parser<'F, 'A>()
-    override this.Apply(s, vs) = Trampoline.delay (fun () -> Pure(a, Fail(None, [], Set.empty)) :> ParseResult<_, _>)
+    override this.Apply(s, vs) =
+      Trampoline.suspend
+        (fun () ->Trampoline.delay (fun () -> Pure(a, Fail(None, [], Set.empty)) :> ParseResult<_, _>))
     override this.Map(f) = UnitP(f a) :> _1<Parser, _>
     override this.Bind(f) = f a
 
